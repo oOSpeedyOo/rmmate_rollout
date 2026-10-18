@@ -1,0 +1,115 @@
+# Stack fuer den eigenen Betrieb mit Lizenz hinter einem Reverse-Proxy, der in einem eigenen Docker-Netz laeuft (etwa ein
+# Proxy-Container fuer mehrere Dienste): zieht das fertige Server-Image aus ghcr.io (kein Build im Stack).
+# Die Datenbank haengt nur am internen Netz des Stacks, das keinen Weg nach aussen hat. Der Server haengt zusaetzlich am
+# vorhandenen Netz des Reverse-Proxys; dort traegt man im Proxy als Ziel den Containernamen des Servers mit Port 8080 ein.
+# Pflicht: RMM_PROXY_NETWORK (Name des vorhandenen Netzes des Reverse-Proxys, zu sehen mit "docker network ls").
+# Kein Port auf dem Host: Wer zusaetzlich einen braucht, ergaenzt beim Server einen Abschnitt "ports" wie in
+# docker-compose.yml oder nimmt gleich die Standarddatei.
+# Den Registry-Zugang (ghcr.io mit Rollout-Benutzer und Token vom Lizenzgeber) vorher einmal in Portainer hinterlegen.
+# Den ersten Administrator, die Lizenz, die oeffentliche Adresse und das Branding legt die Ersteinrichtung im Browser fest
+# (https://<adresse>/setup, Einrichtungscode aus dem Container-Log). Paket und Grenzen kommen aus der Lizenz. Siehe README.md.
+name: rmm
+
+services:
+  db:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rmm
+      POSTGRES_USER: rmm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD muss gesetzt sein}
+    # Nur im internen Netz: weder der Reverse-Proxy noch andere Container erreichen die Datenbank.
+    networks:
+      internal:
+    volumes:
+      # Ab postgres:18 liegt das Daten-Volume auf /var/lib/postgresql
+      # Benannter Datentraeger (Standard) oder ein Pfad auf dem Host, z. B. RMM_DB_PATH=/srv/rmm/db
+      - ${RMM_DB_PATH:-rmm-db}:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rmm -d rmm"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  server:
+    # Fester Stand? RMM_IMAGE_TAG auf die Version setzen, die der Lizenzgeber nennt, etwa "0.85.0" (Standard: latest)
+    image: ghcr.io/oospeedyoo/rmmate-server:${RMM_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: Host=db;Port=5432;Database=rmm;Username=rmm;Password=${POSTGRES_PASSWORD}
+      # Notfallweg, wenn der einzige Administrator ausgesperrt ist: seine E-Mail eintragen, neu bereitstellen, danach wieder leeren.
+      # Leer = aus. Siehe README.md, Notfallweg.
+      RMM_RECOVER_ADMIN: ${RMM_RECOVER_ADMIN:-}
+      # Vorgabe fuer den Produktnamen, solange in der Oberflaeche keiner gesetzt ist. Leer = Vorgabe des Servers.
+      Branding__ProductName: ${RMM_PRODUCT_NAME:-}
+      # Agents automatisch auf den Stand dieses Server-Builds bringen
+      Agent__AutoUpdate: ${RMM_AGENT_AUTOUPDATE:-true}
+      # Optionaler Rueckfall fuer eine unbeaufsichtigte Installation: der Lizenzschluessel. Im Normalfall traegt man ihn in der
+      # Ersteinrichtung ein. Leer = keiner.
+      RMM_LICENSE: ${RMM_LICENSE:-}
+      # Testwerkzeuge (Neustart-Abfrage testen, Automatik-Lauf sofort). Leer = aus; im Alltag aus lassen.
+      RMM_DEV_TOOLS: ${RMM_DEV_TOOLS:-}
+      # Proxy fuer ausgehende Verbindungen des Servers (Lizenz-Instanz, Web-Push). Leer = direkt.
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+      # Data-Protection-Schluessel (Sitzungen, Geheimnisse, Installationsschluessel) ueber Neustarts und Redeploys hinweg behalten
+      DataProtection__KeysPath: /data/keys
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    # Kein Port-Mapping: Der Reverse-Proxy erreicht den Server im gemeinsamen Netz auf Port 8080. Ausgehende Verbindungen
+    # (etwa zur Lizenz-Instanz und fuer Benachrichtigungen) laufen ueber das Netz des Proxys; das interne Netz hat keinen Ausgang.
+    networks:
+      internal:
+      proxy:
+    volumes:
+      # Benannter Datentraeger (Standard) oder ein Pfad auf dem Host, z. B. RMM_KEYS_PATH=/srv/rmm/keys
+      - ${RMM_KEYS_PATH:-rmm-server-keys}:/data/keys
+      # Ziel der Datensicherung: Der Server schreibt Skript und Auftraege, der Dienst "backup" die Sicherungen (siehe unten).
+      - ${RMM_BACKUP_PATH:-rmm-backup}:/data/backup
+
+  # Sicherungsdienst: dasselbe Image wie die Datenbank, damit pg_dump immer zur Version der Datenbank passt (Tag gleich halten).
+  # Der Server plant die Sicherung (Einstellungen, Datenbank, Datensicherung) und schreibt Auftraege und das Skript in das Ziel;
+  # dieser Dienst sichert mit pg_dump, prueft die Datei, legt den Schluesselring als eigene Datei daneben und raeumt nach Anzahl
+  # auf. Ohne Auftrag sichert er spaetestens nach 25 Stunden trotzdem. Siehe README.md, Datensicherung.
+  backup:
+    image: postgres:18.6-alpine
+    restart: unless-stopped
+    # Gleicher Benutzer wie der Server (UID 1654), kein Root.
+    user: "1654:1654"
+    depends_on:
+      db:
+        condition: service_healthy
+      # Der Server legt das Ziel mit den Rechten fuer UID 1654 an und schreibt das Skript.
+      server:
+        condition: service_started
+    environment:
+      PGHOST: db
+      PGUSER: rmm
+      PGDATABASE: rmm
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    # Wartet, bis der Server das Skript geschrieben hat, und fuehrt es dann aus.
+    entrypoint: ["/bin/sh", "-c", "until [ -f /backup/.rmmate/backup.sh ]; do sleep 30; done; exec bash /backup/.rmmate/backup.sh"]
+    # Nur im internen Netz: Der Dienst braucht nur die Datenbank, keinen Weg nach aussen.
+    networks:
+      internal:
+    volumes:
+      # Benannter Datentraeger (Standard) oder ein Pfad auf dem Host, z. B. RMM_BACKUP_PATH=/srv/rmm/backup (beschreibbar fuer UID 1654)
+      - ${RMM_BACKUP_PATH:-rmm-backup}:/backup
+      # Schluesselring des Servers nur lesend, damit er als eigene Datei in jede Sicherung kommt.
+      - ${RMM_KEYS_PATH:-rmm-server-keys}:/keys:ro
+
+volumes:
+  rmm-db:
+  rmm-server-keys:
+  rmm-backup:
+
+networks:
+  # Netz nur zwischen Server und Datenbank, ohne Verbindung nach aussen.
+  internal:
+    internal: true
+  # Vorhandenes Netz des Reverse-Proxys; wird nicht angelegt, sondern nur genutzt.
+  proxy:
+    external: true
+    name: ${RMM_PROXY_NETWORK:?RMM_PROXY_NETWORK muss gesetzt sein (Name des Netzes des Reverse-Proxys, siehe docker network ls)}
