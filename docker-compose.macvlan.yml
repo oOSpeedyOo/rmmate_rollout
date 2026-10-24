@@ -2,8 +2,9 @@
 # (kein Build im Stack). Der Server haengt zusaetzlich am internen Netz des Stacks, damit er die Datenbank erreicht.
 # Pflicht: RMM_IPV4_ADDRESS. Optional: RMM_MACVLAN_NETWORK (Name des vorhandenen MacVLAN-Netzes, Standard "MacVLAN").
 # Den Registry-Zugang (ghcr.io mit Rollout-Benutzer und Token vom Lizenzgeber) vorher einmal in Portainer hinterlegen.
-# Den ersten Administrator, die Lizenz, die oeffentliche Adresse und das Branding legt die Ersteinrichtung im Browser fest
-# (https://<adresse>/setup, Einrichtungscode aus dem Container-Log). Paket und Grenzen kommen aus der Lizenz. Siehe README.md.
+# Den ersten Administrator, die oeffentliche Adresse und das Branding legt die Ersteinrichtung im Browser fest (https://<adresse>/setup,
+# Einrichtungscode aus dem Container-Log); ab der ersten Version mit eingebautem Schluessel des Lizenzgebers auch die Lizenz, aus der
+# dann Paket und Grenzen kommen. Siehe README.md.
 name: rmm
 
 services:
@@ -25,7 +26,7 @@ services:
       retries: 12
 
   server:
-    # Fester Stand? RMM_IMAGE_TAG auf die Version setzen, die der Lizenzgeber nennt, etwa "0.85.0" (Standard: latest)
+    # Fester Stand? RMM_IMAGE_TAG auf die Version setzen, die der Lizenzgeber nennt, etwa "0.87.0" (Standard: latest)
     image: ghcr.io/oospeedyoo/rmmate-server:${RMM_IMAGE_TAG:-latest}
     restart: unless-stopped
     depends_on:
@@ -50,7 +51,9 @@ services:
       NO_PROXY: ${NO_PROXY:-}
       # Data-Protection-Schluessel (Sitzungen, Geheimnisse, Installationsschluessel) ueber Neustarts und Redeploys hinweg behalten
       DataProtection__KeysPath: /data/keys
-      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      # Notfall: vertrauenswuerdige Reverse-Proxys statt der Einstellung in der Oberflaeche (Einstellungen, Server & Verbindung,
+      # Reverse-Proxy; ab Werk Loopback und private Netze). Netzliste wie 172.20.0.0/16, any oder none. Leer = Einstellung der Oberflaeche.
+      RMM_TRUSTED_PROXIES: ${RMM_TRUSTED_PROXIES:-}
     # Kein Port-Mapping: Der Container ist ueber seine eigene Adresse auf Port 8080 erreichbar.
     networks:
       default:
