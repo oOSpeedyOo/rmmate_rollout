@@ -5,10 +5,10 @@ Lizenzgebers. Quellcode ist nicht enthalten: Das Server-Image kommt fertig aus d
 liefert der Server selbst aus. Den Namen, unter dem die Software bei Ihnen und Ihren Kunden erscheint, legen Sie selbst fest
 (Ersteinrichtung bzw. *Einstellungen, Branding*).
 
-**Version und Lizenz.** Lizenzschlüssel prüft der Server ab der ersten Version mit eingebautem Schlüssel des Lizenzgebers. Erst ab
-dieser Version zeigt die Ersteinrichtung den Schritt „Lizenzschlüssel“ und wertet der Server `RMM_LICENSE` aus; frühere Versionen laufen
-ohne Lizenz und ohne diesen Schritt. Welche Version das ist, nennt der Lizenzgeber. `RMM_IMAGE_TAG` deshalb nie auf eine ältere Version
-setzen.
+**Version und Lizenz.** Lizenzschlüssel prüft der Server ab der ersten Version mit eingebautem Schlüssel des Lizenzgebers, das ist 0.89.
+Ab dieser Version zeigt die Ersteinrichtung nach dem ersten Administrator den Schritt „Lizenzschlüssel“, wertet der Server `RMM_LICENSE` aus
+und meldet sich mit dem Schlüssel bei der Lizenz-Instanz an; frühere Versionen laufen ohne Lizenz und ohne diesen Schritt.
+`RMM_IMAGE_TAG` deshalb nie auf eine Version vor 0.89 setzen.
 
 | Datei | Wann |
 |---|---|
@@ -35,7 +35,7 @@ Jede Datei enthält drei Dienste: `server` (Oberfläche, REST-Schnittstelle und 
 |---|---|
 | Docker-Host | Linux mit Docker Engine und Compose-Plugin, empfohlen mit Portainer, auf x86_64 oder ARM64 (64 Bit). 2 CPU-Kerne, 2 GB RAM und 20 GB Speicher reichen für einige hundert Geräte. |
 | Adresse und TLS | Ein DNS-Name, etwa `rmm.example.de`, und ein Reverse-Proxy mit Zertifikat davor (Caddy, Traefik, nginx, Nginx Proxy Manager). Der Proxy reicht WebSockets durch, setzt `X-Forwarded-For` und `X-Forwarded-Proto` und lässt Verbindungen mindestens 120 Sekunden ohne Daten offen. Diese Angaben übernimmt der Server ab Werk nur von einem Proxy mit privater Adresse oder auf demselben Host (siehe „Reverse-Proxy und TLS“). |
-| Ausgehende Verbindungen | Der Server verbindet sich über HTTPS (Port 443) mit der Lizenz-Instanz, deren Adresse im Lizenzschlüssel steht, und für Web-Push mit den Push-Diensten der Browser. Ein Proxy für ausgehende Verbindungen gilt über `HTTPS_PROXY` und `NO_PROXY`. Ohne Verbindung zur Lizenz-Instanz gibt es den Offline-Weg (siehe „Lizenz“). |
+| Ausgehende Verbindungen | Der Server verbindet sich über HTTPS (Port 443) mit der Lizenz-Instanz, deren Adresse im Lizenzschlüssel steht (abweichend nur, wenn der Lizenzgeber es nennt: *Einstellungen, Server & Verbindung*, Bereich *Lizenz*), und für Web-Push mit den Push-Diensten der Browser. Ein Proxy für ausgehende Verbindungen gilt über `HTTPS_PROXY` und `NO_PROXY`. Ohne Verbindung zur Lizenz-Instanz gibt es den Offline-Weg (siehe „Lizenz“). |
 | Uhrzeit | Korrekt über NTP. Die Lizenz-Instanz nimmt Anfragen nur an, wenn die Uhr höchstens 10 Minuten abweicht; Zwei-Faktor-Codes hängen ebenfalls davon ab. |
 
 ## Installation in Portainer
@@ -114,12 +114,13 @@ sich noch nicht anmelden.
    Eingabe dort 15 Minuten gesperrt. Für alle gesperrt wird nie, damit Dritte die Einrichtung nicht verhindern können; viele
    Fehlversuche verlangsamen nur jede Eingabe auf einige Sekunden und stehen als Warnung im Log. Ein Neustart des Containers erzeugt
    einen neuen Code und hebt alle Sperren auf.
-2. **Lizenzschlüssel** (ab der ersten Version mit eingebautem Schlüssel des Lizenzgebers) einfügen und „Schlüssel prüfen“. Der Server prüft ihn sofort und zeigt Lizenznehmer, Paket, Grenzen und Laufzeit,
-   danach „Jetzt online aktivieren“. Klappt das nicht, geht es mit „Später aktivieren“ weiter (der Schlüssel gilt dann 14 Tage ohne
-   Aktivierung) oder mit „Offline aktivieren“ (siehe „Lizenz“).
-3. **Öffentliche Adresse und Zeitzone**, vorbelegt aus der Anfrage. Die Adresse ist auch die Server-Adresse für die Agents.
-4. **Erster Administrator:** E-Mail, Name und ein eigenes Kennwort. Für dieses Konto ist die Zwei-Faktor-Anmeldung Pflicht; nach der
+2. **Öffentliche Adresse und Zeitzone**, vorbelegt aus der Anfrage. Die Adresse ist auch die Server-Adresse für die Agents.
+3. **Erster Administrator:** E-Mail, Name und ein eigenes Kennwort. Für dieses Konto ist die Zwei-Faktor-Anmeldung Pflicht; nach der
    ersten Anmeldung richten Sie sie ein und sichern die Wiederherstellungscodes.
+4. **Lizenzschlüssel** (ab 0.89) einfügen und „Schlüssel prüfen“. Der Server prüft ihn sofort und zeigt Lizenznehmer, Paket, Grenzen,
+   Laufzeit und die Lizenz-Instanz, danach „Jetzt online aktivieren“: Damit meldet sich die Installation bei der Lizenz-Instanz an. Klappt das
+   nicht, geht es mit „Später aktivieren“ weiter (der Schlüssel gilt dann 14 Tage ohne Aktivierung) oder mit „Offline aktivieren“ (siehe
+   „Lizenz“). Bis die Lizenz eingetragen ist, bleibt die Einrichtung offen, auch nach einem Neustart.
 5. **Branding** (überspringbar): Produktname und Akzentfarbe. Logos danach unter *Einstellungen, Branding*.
 6. **Abschluss:** Zusammenfassung und „Einrichtung abschließen“, danach geht es mit der Anmeldung weiter.
 
@@ -127,7 +128,7 @@ Anschließend in dieser Reihenfolge: *Einstellungen, Sicherheit* (Zwei-Faktor-Pf
 *Benachrichtigungen* (Kanäle und Regeln), *Kunden* (ersten Kunden anlegen), dann Agents über *Installations-Tokens* bzw. die Aktion
 „Agent installieren“ beim Kunden ausrollen.
 
-**Unbeaufsichtigt (ab der ersten Version mit eingebautem Schlüssel):** Mit `RMM_LICENSE` trägt der Server den Lizenzschlüssel beim Start selbst ein und aktiviert ihn kurz danach; der
+**Unbeaufsichtigt (ab 0.89):** Mit `RMM_LICENSE` trägt der Server den Lizenzschlüssel beim Start selbst ein und aktiviert ihn kurz danach; der
 Schritt entfällt. Ein ungültiger Schlüssel erscheint als Betriebswarnung, und die Ersteinrichtung fragt ihn ab. Den ersten Administrator
 legt immer die Ersteinrichtung an.
 
@@ -162,7 +163,7 @@ keine Adressen von Geräten.
 |---|---|---|
 | Hinweis | 3 Tage ohne Erneuerung, 30 Tage vor dem Vertragsende | Hinweis nur für Administratoren |
 | Warnung | Lizenzbescheid abgelaufen (30 Tage ohne Erneuerung), Vertragsende erreicht oder vom Lizenzgeber angekündigt | Hinweis für alle Benutzer mit Datum der nächsten Stufe und Kontakt. Alles funktioniert. |
-| Eingeschränkt | 14 Tage nach Beginn der Warnung | Keine neuen Geräte und Benutzer, keine Fernzugriffe (Terminal, Dateien, Registry, Dienste und Prozesse samt ihren Live-Listen, Web-Zugriff, Fernwartung), kein Steuern von Hand (Neustart und Herunterfahren, VMs, Änderungen im Active Directory), keine neuen Jobs (auch keine Software-Vorgänge von Hand), keine Änderungen an Einstellungen außer der Lizenz; schreibende REST-Aufrufe antworten mit 423. Lesen bleibt möglich, auch die Live-Ereignisanzeige, die Leistungsmessung, die angemeldeten Benutzer, die VM-Liste, die Ansicht des Active Directory und die Software-Listen. |
+| Eingeschränkt | 14 Tage nach Beginn der Warnung | Keine neuen Geräte und Benutzer, keine Fernzugriffe (Terminal, Dateien, Registry, Dienste und Prozesse samt ihren Live-Listen, Web-Zugriff, Fernwartung), kein Steuern von Hand (Neustart und Herunterfahren, VMs, Änderungen im Active Directory), keine neuen Aufgaben (auch keine Software-Vorgänge von Hand), keine Änderungen an Einstellungen außer der Lizenz; schreibende REST-Aufrufe antworten mit 423. Lesen bleibt möglich, auch die Live-Ereignisanzeige, die Leistungsmessung, die angemeldeten Benutzer, die VM-Liste, die Ansicht des Active Directory und die Software-Listen. |
 | Gesperrt | 30 Tage nach Beginn der Einschränkung | Die Oberfläche zeigt nur noch die Seite *Lizenz*, die REST-Schnittstelle antwortet mit 423 (außer `/api/v1/license`). |
 
 In jeder Stufe laufen Agent-Verbindung, Checks, Alarme, Benachrichtigungen, Patch-Automatik, Agent-Updates, Datensicherung, Anmeldung
