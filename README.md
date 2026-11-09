@@ -139,6 +139,11 @@ Repository und das neue Image zusammen. Beim Start bringt der Server das Datenba
 nicht, deshalb vor größeren Sprüngen eine Sicherung anlegen (*Einstellungen, Datenbank, Sicherungen des Servers*, „Jetzt sichern“).
 Die Agents aktualisieren sich danach selbst, gestaffelt in Ringen (*Einstellungen, Agent-Updates*).
 
+**Untergrenze.** Ab Version 0.100 setzt ein Update mindestens 0.99 voraus. Eine Datenbank aus einer älteren Version übernimmt der Server
+nicht und lässt sie unverändert; dann zuerst auf 0.99 aktualisieren (`RMM_IMAGE_TAG` auf `0.99.0`), einmal starten und danach auf die
+neue Version. Agents unter 0.91.1 erscheinen in der Geräteliste als „Veraltet“ und holen sich das Update über die Verbindung; ohne
+automatisches Update den Agent einmal neu installieren.
+
 Automatisch geht es mit *GitOps updates* im Stack (Mechanismus *Polling*, dazu *Re-pull image*); dann folgt die Instanz jeder Änderung
 dieses Repositorys. Mit `RMM_IMAGE_TAG` auf einer Version wie `0.87.0` bleibt die Instanz auf diesem Stand, bis der Wert geändert wird.
 
@@ -214,22 +219,24 @@ bereitstellen. Der Notfallweg funktioniert in jeder Stufe der Lizenz.
 
 ## Alle Variablen
 
-| Variable | Pflicht | Bedeutung |
+| Variable | Vorgabe | Bedeutung |
 |---|---|---|
-| `POSTGRES_PASSWORD` | ja | Kennwort der Datenbank. Nach dem ersten Start nicht mehr ändern. |
-| `RMM_IMAGE_TAG` | nein | Version des Server-Images, Standard `latest`. Mit einer Version wie `0.87.0` bleibt die Instanz auf diesem Stand. |
-| `RMM_HTTP_PORT` | nein | Port auf dem Host, Standard `8080`. Nur `docker-compose.yml`. |
-| `RMM_RECOVER_ADMIN` | nein | Notfallweg (siehe oben). Leer = aus. |
-| `RMM_PRODUCT_NAME` | nein | Vorgabe für den Produktnamen, solange die Ersteinrichtung bzw. die Oberfläche keinen setzt. |
-| `RMM_AGENT_AUTOUPDATE` | nein | Vorgabe für automatische Agent-Updates (`true` oder `false`); die Einstellung in der Oberfläche gewinnt. |
-| `RMM_LICENSE` | nein | Lizenzschlüssel für eine unbeaufsichtigte Installation, ausgewertet ab der ersten Version mit eingebautem Schlüssel des Lizenzgebers. Im Normalfall leer lassen und den Schlüssel in der Ersteinrichtung eintragen. |
-| `RMM_DEV_TOOLS` | nein | `true` schaltet Testwerkzeuge ein (Neustart-Abfrage testen, Automatik-Lauf sofort). Im Alltag aus lassen. |
-| `HTTPS_PROXY`, `NO_PROXY` | nein | Proxy für ausgehende Verbindungen des Servers und Ausnahmen davon. Leer = direkt. |
-| `RMM_TRUSTED_PROXIES` | nein | Nur im Notfall: vertrauenswürdige Reverse-Proxys statt der Einstellung *Einstellungen, Server & Verbindung, Reverse-Proxy*. Netzliste wie `172.20.0.0/16`, `any` (jeder Absender; Adressen und https lassen sich dann fälschen, der Server warnt) oder `none`. Gesetzt gewinnt sie vor der Oberfläche. Leer = Einstellung der Oberfläche. |
-| `RMM_DB_PATH`, `RMM_KEYS_PATH` | nein | Pfade auf dem Host statt benannter Datenträger; der Schlüsselpfad beschreibbar für UID 1654. |
-| `RMM_BACKUP_PATH` | nein | Ziel der Datensicherung auf dem Host, etwa eine NAS-Freigabe; beschreibbar für UID 1654. |
-| `RMM_IPV4_ADDRESS`, `RMM_MACVLAN_NETWORK` | nur MacVLAN | Eigene IP-Adresse und Name des vorhandenen MacVLAN-Netzes (Standard `MacVLAN`). |
-| `RMM_PROXY_NETWORK` | nur Proxy-Variante | Name des vorhandenen Docker-Netzes des Reverse-Proxys. |
+| `POSTGRES_PASSWORD` | keine, Pflicht | Kennwort der Datenbank. Nach dem ersten Start nicht mehr ändern. |
+| `RMM_IMAGE_TAG` | `latest` | Version des Server-Images. Mit einer Version wie `0.87.0` bleibt die Instanz auf diesem Stand. |
+| `RMM_HTTP_PORT` | `8080` | Port auf dem Host. Nur `docker-compose.yml`. |
+| `RMM_RECOVER_ADMIN` | leer = aus | Notfallweg (siehe oben). |
+| `RMM_PRODUCT_NAME` | leer = Vorgabe des Servers | Vorgabe für den Produktnamen, solange die Ersteinrichtung bzw. die Oberfläche keinen setzt. |
+| `RMM_AGENT_AUTOUPDATE` | `true` | Vorgabe für automatische Agent-Updates (`true` oder `false`); die Einstellung in der Oberfläche gewinnt. |
+| `RMM_LICENSE` | leer | Lizenzschlüssel für eine unbeaufsichtigte Installation, ausgewertet ab der ersten Version mit eingebautem Schlüssel des Lizenzgebers. Im Normalfall leer lassen und den Schlüssel in der Ersteinrichtung eintragen. |
+| `RMM_DEV_TOOLS` | leer = aus | `true` schaltet Testwerkzeuge ein (Neustart-Abfrage testen, Automatik-Lauf sofort). Im Alltag aus lassen. |
+| `HTTPS_PROXY`, `NO_PROXY` | leer = direkt | Proxy für ausgehende Verbindungen des Servers und Ausnahmen davon. |
+| `RMM_TRUSTED_PROXIES` | leer = Einstellung der Oberfläche | Nur im Notfall: vertrauenswürdige Reverse-Proxys statt der Einstellung *Einstellungen, Server & Verbindung, Reverse-Proxy*. Netzliste wie `172.20.0.0/16`, `any` (jeder Absender; Adressen und https lassen sich dann fälschen, der Server warnt) oder `none`. Gesetzt gewinnt sie vor der Oberfläche. |
+| `RMM_DB_PATH` | benannter Datenträger `rmm-db` | Pfad auf dem Host für die Datenbank. |
+| `RMM_KEYS_PATH` | benannter Datenträger `rmm-server-keys` | Pfad auf dem Host für den Schlüsselring; beschreibbar für UID 1654. |
+| `RMM_BACKUP_PATH` | benannter Datenträger `rmm-backup` | Ziel der Datensicherung auf dem Host, etwa eine NAS-Freigabe; beschreibbar für UID 1654. |
+| `RMM_IPV4_ADDRESS` | keine, Pflicht in der MacVLAN-Variante | Eigene IP-Adresse des Servers im MacVLAN. |
+| `RMM_MACVLAN_NETWORK` | `MacVLAN` | Name des vorhandenen MacVLAN-Netzes. |
+| `RMM_PROXY_NETWORK` | keine, Pflicht in der Proxy-Variante | Name des vorhandenen Docker-Netzes des Reverse-Proxys. |
 
 Alles andere (Produktname, Farben, Checks, Fristen, Patchmanagement, Fernwartung und so weiter) steht in der Oberfläche unter
 *Einstellungen* und braucht keinen Neustart.
